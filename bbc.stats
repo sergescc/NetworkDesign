@@ -1,0 +1,14 @@
+
+
+////////////////////// INCOMING PACKET STATISTICS ////////////////////////////
+N: 50501
+Total Bytes: 139426072
+Inter-Arrival Mean: 6955.731
+Inter-Arrival Variance: 5450563782.636
+
+
+////////////////////// OUTGOING PACKET STATISTICS ////////////////////////////
+N: 49497
+Total Bytes: 148332
+Inter-Arrival Mean: 7096.802
+Inter-Arrival Variance: 5466741163.101

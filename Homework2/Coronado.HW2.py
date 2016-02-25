@@ -1,44 +1,33 @@
-#!/usr/bin/python
-#///////////////////////////// CoronadoS.HW.2.py ///////////////////////////////////////////
-#
-#   By: Sergio Coroando
-#
-#   Purpose:
-#   Pases in a file to be parsed from the command prompt and outputs traffic statistics from it
-#
-#   Dependency:
-#   Depends of statistics and matplotlib, numpy and scipy libraries
-#   Also must include modules:
-#       IPTrafficData
-#       CursorCntl
-#   Usage:
-#   $ CoronadoS.HW1.py <data file> <graph Output file (optional)>
-#
-#////////////////////////////////////////////////////////////////////////////////////////////////
-
-#/////////////////////////////////////// Imports ////////////////////////////////////////////////
-
 import CursorCntl
 import IPTrafficData
 import sys
-import statistics
-import numpy as np
+import statistics as stats
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gs
 import math
 from scipy.stats import poisson
 
-# ////////////////////////////////////////// Main ////////////////////////////////////////////////
 
-DOMAIN_ADDR = [129,63]
+TITLE_SIZE = 12
+AXIS_LBL = 10
+AXIS_MRK = 10
+LBL_DIVIDER = 50
+PMF_LEGEND_SIZE = 8
+N_LEGEND_SIZE = 8
+BORDER_PAD = 5
+HEIGHT_PAD = .7
+WIDTH_PAD = 5
+FIGX_SIZE = 5
+FIGY_SIZE = 5
+
+
+DOMAIN_ADDR = [66, 30]
+USEC_TO_SEC = 1000000.0
+BIN_SIZE = 1000000
 NUM_BINS = 100
-BIN_uSEC = 10
+PNUM_BINS = 50
+ROUND_TO_PLACE = 50.0
 
-def reject_outliers(dat):
-    m = 2
-    u = np.mean(dat)
-    s = np.std(dat)
-    filtered = [e for e in dat if (u - 2 * s < e < u + 2 * s)]
-    return filtered
 
 if __name__ == "__main__":
 
@@ -50,241 +39,231 @@ if __name__ == "__main__":
 
     data = IPTrafficData.read_data(sys.argv[1])
 
-    incoming = []
-    incoming_counting = []
-    incoming_p_size = 0
-    incoming_arrival_times = []
+    cTime = 0
 
-    outgoing = []
-    outgoing_counting = []
-    outgoing_p_size =0
-    outgoing_arrival_times = []
-
-    out_ref_time_set = False
-    in_ref_time_set = False
-    outgoing_ref_time = 0
-    incoming_ref_time = 0
-    o_n = 0
     i_n = 0
-
-    i_bin_start = BIN_uSEC
-    o_bin_start = BIN_uSEC
+    i_p_size = 0
+    i_elapsed = 0
+    i_elapsed_t = []
+    i_inter_arr_t = []
+    i_ref_t_set = False
+    i_ref_t = 0
+    i_last_t = 0
+    i_bin_n = 1
     i_bin_count = 0
-    o_bin_count = 0
-    bin_offset = 1
     i_counts = []
+
+    o_n = 0
+    o_p_size = 0
+    o_elapsed = 0
+    o_elapsed_t = []
+    o_inter_arr_t = []
+    o_ref_t_set = False
+    o_ref_t = 0
+    o_prev_t = 0
+    o_bin_n = 1
+    o_bin_count = 0
     o_counts = []
 
     for d in sorted(data):
-        if d.src_ip[:2] == DOMAIN_ADDR[:2]:
-
-            outgoing_p_size += d.p_size
-
-            if out_ref_time_set:
-                o_n += 1
-                if len(outgoing_arrival_times) == 0:
-                    outgoing_arrival_times.append(d.usec - outgoing_ref_time)
-                else:
-                    outgoing_arrival_times.append(d.usec - outgoing[-1].usec)
-                outgoing_counting.append(d.usec - outgoing_ref_time)
-                outgoing.append(d)
-            else:
-                outgoing_ref_time = d.usec
-                out_ref_time_set = True
+        assert (d.usec >= cTime)
+        cTime = d.usec
 
         if d.dst_ip[:2] == DOMAIN_ADDR[:2]:
-            incoming_p_size += d.p_size
-            if in_ref_time_set:
+
+            i_p_size += d.p_size
+
+            if i_ref_t_set:
                 i_n += 1
-                if len(incoming_arrival_times) == 0:
-                    incoming_arrival_times.append(d.usec - incoming_ref_time)
+                i_elapsed = d.usec - i_ref_t
+                i_inter_arr_t.append(i_elapsed - i_elapsed_t[-1])
+                i_elapsed_t.append(i_elapsed)
+
+                if i_elapsed <= (i_bin_n * BIN_SIZE):
+                    i_bin_count += 1
                 else:
-                    incoming_arrival_times.append(d.usec - incoming[-1].usec)
-                incoming_counting.append(d.usec - incoming_ref_time)
-                incoming.append(d)
+                    while i_elapsed > (i_bin_n * BIN_SIZE):
+                        i_counts.append(i_bin_count)
+                        i_bin_n += 1
+                        i_bin_count = 0
+                    i_bin_count = 1
             else:
-                incoming_ref_time = d.usec
-                in_ref_time_set = True
+                i_ref_t = d.usec
+                i_ref_t_set = True
+                i_elapsed_t.append(0)
+            i_prev_t = d.usec
 
-    for d in sorted(incoming_arrival_times):
-        if d < i_bin_start:
-            i_bin_count += 1
-        else:
-            i_counts.append(i_bin_count)
-            while d >= i_bin_start:
-                i_bin_start += BIN_uSEC
-                i_counts.append(0)
-            i_bin_count = 1
+        if d.src_ip[:2] == DOMAIN_ADDR[:2]:
 
-    for d in sorted(outgoing_arrival_times):
-        if d < o_bin_start:
-            o_bin_count += 1
-        else:
-            o_counts.append(o_bin_count)
-            while d >= o_bin_start:
-                o_bin_start += BIN_uSEC
-                o_counts.append(0)
-            i_bin_count = 1
+            o_p_size += d.p_size
 
+            if o_ref_t_set:
+                o_n += 1
+                o_elapsed = d.usec - o_ref_t
+                o_inter_arr_t.append(o_elapsed - o_elapsed_t[-1])
+                o_elapsed_t.append(o_elapsed)
 
-    i_num = sum(i_counts)
-    o_num = sum(o_counts)
+                if o_elapsed <= (o_bin_n * BIN_SIZE):
+                    o_bin_count += 1
+                else:
+                    while o_elapsed > (o_bin_n * BIN_SIZE):
+                        o_counts.append(o_bin_count)
+                        o_bin_n += 1
+                        o_bin_count = 0
+                    o_bin_count = 1
+            else:
+                o_ref_t = d.usec
+                o_ref_t_set = True
+                o_elapsed_t.append(0)
+            o_prev_t = d.usec
 
-    fig, (n, ax1, ax2, ax3, ax4) = plt.subplots(5, 1, sharex=False, sharey=False)
+    grid = gs.GridSpec(3, 2)
+    n  = plt.subplot(grid[0, :])
+    ic = plt.subplot(grid[1, 0])
+    ip = plt.subplot(grid[2, 0])
+    oc = plt.subplot(grid[1, 1])
+    op = plt.subplot(grid[2, 1])
 
-    i_avg = statistics.mean(incoming_arrival_times)
-    i_var = statistics.variance(incoming_arrival_times, i_avg)
-    i_max = max(incoming_arrival_times)
-    i_min = min(incoming_arrival_times)
-    i_bin_max = int(math.ceil(i_max/100.0)*100)
-    i_seg = i_bin_max/NUM_BINS
+    #fig, (n, ic, oc, ip, op) = plt.subplots(5, 1, sharex=False, sharey=False)
 
-    o_avg = statistics.mean(outgoing_arrival_times)
-    o_var = statistics.variance(outgoing_arrival_times, o_avg)
-    o_max = max(outgoing_arrival_times)
-    o_min = min(outgoing_arrival_times)
-    o_bin_max = int(math.ceil(o_max/100.0)*100)
-    o_seg = o_bin_max/NUM_BINS
-
-    print ("******** Raw data ********")
-    print ("Incoming Max: " + str(i_max) + ' us')
-    print ("Incoming Min: " + str(i_min) + ' us')
-    print ("Incoming Avg: " + '{0:.2f}'.format(i_avg) + ' us')
-    print ("Incoming Var: " + '{0:.2f}'.format(i_avg) + ' us^2')
-    print ("Incoming N: " + str(i_n))
-
-    print ("Outgoing Max: " + str(o_max) + ' us')
-    print ("Outgoing Min: " + str(o_min) + ' us')
-    print ("Outgoing Avg: " + '{0:.2f}'.format(o_avg) + ' us')
-    print ("Outgoing Var: " + '{0:.2f}'.format(o_var) + ' us^2')
-    print ("Outgoing N: " + str(o_n))
-
-    n.plot(incoming_counting, range(0, len(incoming_counting), 1),
+    n.plot(i_elapsed_t, range(0, len(i_elapsed_t), 1),
            color='blue',
            alpha=0.2,
-           label='N(t) Incoming Packets',
+           label='Incoming',
            linewidth=2,
            ls='-',
            drawstyle='step-pre')
-    n.plot(outgoing_counting, range(0, len(outgoing_counting), 1),
+    n.plot(o_elapsed_t, range(0, len(o_elapsed_t), 1),
            color='green',
            alpha=0.2,
-           label='N(t) Outgoing Packets',
+           label='Outgoing',
            linewidth=2,
            ls='-',
            drawstyle='step-pre')
-    n.legend()
 
-    ax1.hist(incoming_arrival_times,
-             bins=range(0, i_bin_max + i_seg, i_seg),
-             normed=False,
-             facecolor='green',
-             alpha=0.2,
-             label='Incoming Packets Counts',
-             linewidth=2)
-    ax2.hist(outgoing_arrival_times,
-             bins=range(0, o_bin_max + o_seg, o_seg),
-             normed=False,
-             facecolor='blue',
-             alpha=0.2,
-             label='Outgoing Packets Counts',
-             linewidth=2)
+    for tick in n.xaxis.get_major_ticks():
+        tick.label.set_fontsize(AXIS_MRK)
+    for tick in n.yaxis.get_major_ticks():
+        tick.label.set_fontsize(AXIS_MRK)
+    n.set_ylabel("Total Count", fontdict={'fontsize': AXIS_LBL})
+    n.set_xlabel("Time usec", fontdict={'fontsize': AXIS_LBL})
+    n.set_title("Number of Packets Over Time", fontdict={'fontsize': TITLE_SIZE})
+    n.legend(loc=4, prop={'size': N_LEGEND_SIZE})
 
-    ax1.set_ylabel("Count")
-    ax1.set_xlabel("Time us")
-    ax1.set_xticks(range(0, i_bin_max + i_seg, i_seg * 20))
+    i_bin_size = int((math.ceil(max(i_inter_arr_t)/ROUND_TO_PLACE) * int(ROUND_TO_PLACE))/NUM_BINS)
+    o_bin_size = int((math.ceil(max(o_inter_arr_t)/ROUND_TO_PLACE) * int(ROUND_TO_PLACE))/NUM_BINS)
 
-    ax2.set_ylabel("Count")
-    ax2.set_xlabel("Time us")
-    ax2.set_xticks(range(0, o_bin_max + o_seg, o_seg * 20))
+    ic.hist(i_inter_arr_t,
+            bins=range(0, max(i_inter_arr_t) + i_bin_size, i_bin_size),
+            normed=True,
+            facecolor='green',
+            alpha=0.2,
+            label='Incoming Packets Counts',
+            linewidth=2)
 
-    incoming_arrival_times = reject_outliers(incoming_arrival_times)
-    outgoing_arrival_times = reject_outliers(outgoing_arrival_times)
-    o_avg = statistics.mean(outgoing_arrival_times)
-    i_avg = statistics.mean(incoming_arrival_times)
+    for tick in ic.xaxis.get_major_ticks():
+        tick.label.set_fontsize(AXIS_MRK)
+    for tick in ic.yaxis.get_major_ticks():
+        tick.label.set_fontsize(AXIS_MRK)
+    ic.set_ylabel("Probability", fontdict={'fontsize': AXIS_LBL})
+    ic.set_xlabel("Time us", fontdict={'fontsize': AXIS_LBL})
+    ic.set_title("Probability Distribution\nIncoming inter-packet times", fontdict={'fontsize': TITLE_SIZE})
+    ic.set_xticks(range(0, max(i_inter_arr_t) + i_bin_size, i_bin_size * LBL_DIVIDER))
+    ic.set_xlim(-100, max(i_inter_arr_t) + 100)
+    oc.hist(o_inter_arr_t,
+            bins=range(0, max(o_inter_arr_t) + o_bin_size, o_bin_size),
+            normed=True,
+            facecolor='blue',
+            alpha=0.2,
+            label='Outgoing Packets Counts',
+            linewidth=2)
 
-    i_var = statistics.variance(incoming_arrival_times, i_avg)
-    i_max = max(incoming_arrival_times)
-    i_min = min(incoming_arrival_times)
+    for tick in oc.xaxis.get_major_ticks():
+        tick.label.set_fontsize(AXIS_MRK)
+    for tick in oc.yaxis.get_major_ticks():
+        tick.label.set_fontsize(AXIS_MRK)
+    oc.set_ylabel("Probability", fontdict={'fontsize': AXIS_LBL})
+    oc.set_xlabel("Time us", fontdict={'fontsize': AXIS_LBL})
+    oc.set_title("Probability Distribution\n Outgoing inter-packet times", fontdict={'fontsize': TITLE_SIZE})
+    oc.set_xticks(range(0, max(o_inter_arr_t) + o_bin_size, o_bin_size*LBL_DIVIDER))
+    ic_mean = stats.mean(i_counts)
+    ic_limit = math.ceil(max(i_counts)/ROUND_TO_PLACE) * ROUND_TO_PLACE
+    ip_bin_size = int(ic_limit/ (PNUM_BINS * 1.0))
 
-    i_bin_max = int(math.ceil(i_max/100.0)*100)
-    i_seg = i_bin_max/NUM_BINS
+    oc_mean = stats.mean(o_counts)
+    oc_limit = math.ceil(max(o_counts)/ROUND_TO_PLACE) * ROUND_TO_PLACE
+    op_bin_size = int(oc_limit/ (PNUM_BINS * 1.0))
 
-    o_var = statistics.variance(outgoing_arrival_times, o_avg)
-    o_max = max(outgoing_arrival_times)
-    o_min = min(outgoing_arrival_times)
-    o_bin_max = int(math.ceil(o_max/100.0)*100)
-    o_seg = o_bin_max/NUM_BINS
-    incoming_arrival_times = reject_outliers(incoming_arrival_times)
-    outgoing_arrival_times = reject_outliers(outgoing_arrival_times)
-    # Prepare plot
+    i_pdist = poisson(ic_mean)
+    o_pdist = poisson(oc_mean)
 
-    i_counts, i_bins = np.histogram(incoming_arrival_times, range(0, i_bin_max, i_seg), normed=True)
-    o_counts, o_bins = np.histogram(outgoing_arrival_times, range(0, o_bin_max, o_seg), normed=True)
-    i_pdist = poisson(i_avg)
-    o_pdist = poisson(o_avg)
+    ip.hist(i_counts,
+            bins=range(0, int(ic_limit), ip_bin_size),
+            normed=True,
+            color='green',
+            alpha=.2,
+            label='Data')
+    ip.bar(range(0, int(ic_limit), ip_bin_size),
+           i_pdist.pmf(range(0, int(ic_limit), ip_bin_size)),
+           color='purple',
+           width=ip_bin_size,
+           alpha=.2,
+           label='Exact')
 
-    print ("******** Removed Outliers ********")
+    for tick in ip.xaxis.get_major_ticks():
+        tick.label.set_fontsize(AXIS_MRK)
+    for tick in ip.yaxis.get_major_ticks():
+        tick.label.set_fontsize(AXIS_MRK)
+    ip.set_xlim(0, ic_limit)
+    ip.set_xlabel("Number of Arrivals", fontdict={'fontsize': 10})
+    ip.set_ylabel("Probability p", fontdict={'fontsize': 10})
+    ip.set_title("Incoming Arrival Count Probabilities\ndt ={0:.3f}s".format(BIN_SIZE / USEC_TO_SEC) +
+                 " u= {0:.3f}s ".format(ic_mean), fontdict={'fontsize': 12})
 
-    print ("Incoming Max: " + str(i_max) + ' us')
-    print ("Incoming Min: " + str(i_min) + ' us')
-    print ("Incoming Avg: " + '{0:.2f}'.format(i_avg) + ' us')
-    print ("Incoming Var: " + '{0:.2f}'.format(i_var) + ' us^2')
-    print ("Incoming N: " + str(len(incoming_arrival_times)))
+    ip.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0, prop={'size': PMF_LEGEND_SIZE})
 
-    print ("Outgoing Max: " + str(o_max) + ' us')
-    print ("Outgoing Min: " + str(o_min) + ' us')
-    print ("Outgoing Avg: " + '{0:.2f}'.format(o_avg) + ' us')
-    print ("Outgoing Var: " + '{0:.2f}'.format(o_var) + ' us^2')
-    print ("Outgoing N: " + str(len(outgoing_arrival_times)))
+    op.hist(o_counts,
+            bins=range(0, int(oc_limit), op_bin_size),
+            normed=True,
+            color='blue',
+            alpha=.2,
+            label='Data')
+    op.bar(range(0, int(oc_limit), op_bin_size),
+           o_pdist.pmf(range(0, int(oc_limit), op_bin_size)),
+           color='purple',
+           width=op_bin_size,
+           alpha=.2,
+           label='Exact')
+    for tick in op.xaxis.get_major_ticks():
+        tick.label.set_fontsize(AXIS_MRK)
+    for tick in op.yaxis.get_major_ticks():
+        tick.label.set_fontsize(AXIS_MRK)
+    op.set_xlim(0, oc_limit)
+    op.set_xlabel("Number of Arrivals", fontdict={'fontsize': AXIS_LBL})
+    op.set_ylabel("Probability p", fontdict={'fontsize': AXIS_LBL})
+    op.set_title("Outgoing Arrival Count Probabilities\ndt ={0:.3f}s".format(BIN_SIZE / USEC_TO_SEC) +
+                 " u = {0:.3f}s".format(oc_mean), fontdict={'fontsize': 12})
 
+    op.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0, prop={'size': PMF_LEGEND_SIZE})
 
-    ax3.plot(i_bins[1:], i_counts,
-             color='blue',
-             alpha=.7,
-             label='Incoming PMF',
-             linewidth=3,
-             drawstyle='steps',
-             ls='-')
-    ax3.plot(i_bins[1:], i_pdist.pmf(i_bins[1:]),
-             color='black',
-             alpha=1,
-             label='Poisson u=' + '{0:.2f}'.format(i_avg),
-             linewidth=2,
-             drawstyle='steps',
-             ls=':')
-    ax3.set_xlabel("Time us")
-    ax3.set_ylabel("Probability p")
-    ax3.set_xticks(range(0, i_bin_max + i_seg, i_seg * 10))
-
-    ax4.plot(o_bins[1:], o_counts,
-             color= 'purple',
-             alpha=.7,
-             label='Outgoing PMF',
-             linewidth=3,
-             drawstyle='steps-pre',
-             ls='-')
-    ax4.plot(o_bins[1:], o_pdist.pmf(o_bins[1:]),
-             color='magenta',
-             alpha=1,
-             label='Poisson u=' + '{0:.2f}'.format(o_avg),
-             linewidth=2,
-             drawstyle='steps-pre',
-             ls=':')
-    ax4.set_xlabel("Time us")
-    ax4.set_ylabel("Probability p")
-    ax4.set_xticks(range(0, o_bin_max + o_seg, o_seg * 10))
-
-
-    plt.disconnect(10)
-    ax1.legend()
-    ax2.legend()
-    ax3.legend()
-    ax4.legend()
-
-    plt.grid(True, 'minor')
+    plt.tight_layout(pad=BORDER_PAD, h_pad=HEIGHT_PAD, w_pad=WIDTH_PAD)
 
     if len(sys.argv) > 2:
         plt.savefig(sys.argv[2])
+
+    # #################### INCOMING PACKETS STATS ########################################
+    print("\n\n////////////////////// INCOMING PACKET STATISTICS ////////////////////////////")
+    print("N: " + str(i_n))
+    print("Total Bytes: " + str(i_p_size))
+    print("Inter-Arrival Mean: " + '{0:0.3f}'.format(stats.mean(i_inter_arr_t)))
+    print("Inter-Arrival Variance: " + '{0:0.3f}'.format(stats.variance(i_inter_arr_t)))
+
+
+    # #################### OUTGOING PACKETS STATS ########################################
+    print("\n\n////////////////////// OUTGOING PACKET STATISTICS ////////////////////////////")
+    print("N: " + str(o_n))
+    print("Total Bytes: " + str(o_p_size))
+    print("Inter-Arrival Mean: " + '{0:.3f}'.format(stats.mean(o_inter_arr_t)))
+    print("Inter-Arrival Variance: " + '{0:.3f}'.format(stats.variance(o_inter_arr_t)))
 
     plt.show()
