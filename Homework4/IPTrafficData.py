@@ -52,7 +52,7 @@ def read_data(file):
             entry=IPDataEntry()
             entry.src_ip = [int(sip_split[0]), int(sip_split[1]), int(sip_split[2]), int(sip_split[3])]
             entry.dst_ip = [int(dip_split[0]), int(dip_split[1]), int(dip_split[2]), int(dip_split[3])]
-            entry.oport = int(dip_split[4])
+            entry.oport = int(sip_split[4])
             entry.iport = int(dip_split[4])
             entry.p_size = int(split_line[3])
             time_split = split_line[0].split(":")

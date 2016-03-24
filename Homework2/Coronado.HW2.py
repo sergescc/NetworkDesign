@@ -5,6 +5,7 @@ import statistics as stats
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gs
 import math
+import numpy as np
 from scipy.stats import poisson
 
 
@@ -21,13 +22,19 @@ FIGX_SIZE = 5
 FIGY_SIZE = 5
 
 
-DOMAIN_ADDR = [66, 30]
+DOMAIN_ADDR = [10, 253]
 USEC_TO_SEC = 1000000.0
 BIN_SIZE = 1000000
 NUM_BINS = 100
 PNUM_BINS = 50
 ROUND_TO_PLACE = 50.0
 
+def reject_outliers(data):
+    m = 2
+    u = np.mean(data)
+    s = np.std(data)
+    filtered = [e for e in data if (u - 2 * s < e < u + 2 * s)]
+    return filtered
 
 if __name__ == "__main__":
 
@@ -52,6 +59,7 @@ if __name__ == "__main__":
     i_bin_n = 1
     i_bin_count = 0
     i_counts = []
+    i_bytes = []
 
     o_n = 0
     o_p_size = 0
@@ -64,13 +72,15 @@ if __name__ == "__main__":
     o_bin_n = 1
     o_bin_count = 0
     o_counts = []
+    o_bytes = []
+
 
     for d in sorted(data):
         assert (d.usec >= cTime)
         cTime = d.usec
 
         if d.dst_ip[:2] == DOMAIN_ADDR[:2]:
-
+            i_bytes.append(d.p_size)
             i_p_size += d.p_size
 
             if i_ref_t_set:
@@ -94,7 +104,7 @@ if __name__ == "__main__":
             i_prev_t = d.usec
 
         if d.src_ip[:2] == DOMAIN_ADDR[:2]:
-
+            o_bytes.append(d.p_size)
             o_p_size += d.p_size
 
             if o_ref_t_set:
@@ -149,6 +159,9 @@ if __name__ == "__main__":
     n.set_xlabel("Time usec", fontdict={'fontsize': AXIS_LBL})
     n.set_title("Number of Packets Over Time", fontdict={'fontsize': TITLE_SIZE})
     n.legend(loc=4, prop={'size': N_LEGEND_SIZE})
+    
+    #i_inter_arr_t = reject_outliers(i_inter_arr_t)
+    #o_inter_arr_t = reject_outliers(o_inter_arr_t)
 
     i_bin_size = int((math.ceil(max(i_inter_arr_t)/ROUND_TO_PLACE) * int(ROUND_TO_PLACE))/NUM_BINS)
     o_bin_size = int((math.ceil(max(o_inter_arr_t)/ROUND_TO_PLACE) * int(ROUND_TO_PLACE))/NUM_BINS)
@@ -170,6 +183,7 @@ if __name__ == "__main__":
     ic.set_title("Probability Distribution\nIncoming inter-packet times", fontdict={'fontsize': TITLE_SIZE})
     ic.set_xticks(range(0, max(i_inter_arr_t) + i_bin_size, i_bin_size * LBL_DIVIDER))
     ic.set_xlim(-100, max(i_inter_arr_t) + 100)
+    ic.set_yscale('log')
     oc.hist(o_inter_arr_t,
             bins=range(0, max(o_inter_arr_t) + o_bin_size, o_bin_size),
             normed=True,
@@ -186,29 +200,30 @@ if __name__ == "__main__":
     oc.set_xlabel("Time us", fontdict={'fontsize': AXIS_LBL})
     oc.set_title("Probability Distribution\n Outgoing inter-packet times", fontdict={'fontsize': TITLE_SIZE})
     oc.set_xticks(range(0, max(o_inter_arr_t) + o_bin_size, o_bin_size*LBL_DIVIDER))
+    oc.set_yscale('log')
     ic_mean = stats.mean(i_counts)
-    ic_limit = math.ceil(max(i_counts)/ROUND_TO_PLACE) * ROUND_TO_PLACE
+    ic_limit = int(math.ceil(max(i_counts)/ROUND_TO_PLACE) * ROUND_TO_PLACE)
     ip_bin_size = int(ic_limit/ (PNUM_BINS * 1.0))
 
     oc_mean = stats.mean(o_counts)
-    oc_limit = math.ceil(max(o_counts)/ROUND_TO_PLACE) * ROUND_TO_PLACE
+    oc_limit = int(math.ceil(max(o_counts)/ROUND_TO_PLACE) * ROUND_TO_PLACE)
     op_bin_size = int(oc_limit/ (PNUM_BINS * 1.0))
 
     i_pdist = poisson(ic_mean)
     o_pdist = poisson(oc_mean)
-
-    ip.hist(i_counts,
-            bins=range(0, int(ic_limit), ip_bin_size),
-            normed=True,
-            color='green',
-            alpha=.2,
-            label='Data')
-    ip.bar(range(0, int(ic_limit), ip_bin_size),
-           i_pdist.pmf(range(0, int(ic_limit), ip_bin_size)),
+    ip.bar(range(0, ic_limit, ip_bin_size),
+           i_pdist.pmf(range(0, ic_limit, ip_bin_size)),
            color='purple',
            width=ip_bin_size,
            alpha=.2,
            label='Exact')
+
+    ip.hist(i_counts,
+            bins=range(0, ic_limit, ip_bin_size),
+            normed=True,
+            color='green',
+            alpha=.2,
+            label='Data')
 
     for tick in ip.xaxis.get_major_ticks():
         tick.label.set_fontsize(AXIS_MRK)
@@ -223,13 +238,13 @@ if __name__ == "__main__":
     ip.legend(bbox_to_anchor=(1.05, 1), loc=2, borderaxespad=0, prop={'size': PMF_LEGEND_SIZE})
 
     op.hist(o_counts,
-            bins=range(0, int(oc_limit), op_bin_size),
+            bins=range(0, oc_limit, op_bin_size),
             normed=True,
             color='blue',
             alpha=.2,
             label='Data')
-    op.bar(range(0, int(oc_limit), op_bin_size),
-           o_pdist.pmf(range(0, int(oc_limit), op_bin_size)),
+    op.bar(range(0, oc_limit, op_bin_size),
+           o_pdist.pmf(range(0, oc_limit, op_bin_size)),
            color='purple',
            width=op_bin_size,
            alpha=.2,
@@ -254,16 +269,21 @@ if __name__ == "__main__":
     # #################### INCOMING PACKETS STATS ########################################
     print("\n\n////////////////////// INCOMING PACKET STATISTICS ////////////////////////////")
     print("N: " + str(i_n))
+    print("Connection Time: " + str((i_elapsed_t[-1] - i_elapsed_t[0])/USEC_TO_SEC))
     print("Total Bytes: " + str(i_p_size))
-    print("Inter-Arrival Mean: " + '{0:0.3f}'.format(stats.mean(i_inter_arr_t)))
-    print("Inter-Arrival Variance: " + '{0:0.3f}'.format(stats.variance(i_inter_arr_t)))
-
+    print("Mean Bytes: " + str(stats.mean(i_bytes)))
+    print("Byte Variance: " + str(stats.variance(i_bytes)))
+    print("Inter-Arrival Mean: " + '{0:0.5f}'.format(stats.mean(i_inter_arr_t)/USEC_TO_SEC))
+    print("Inter-Arrival Variance: " + '{0:0.5f}'.format(stats.variance(i_inter_arr_t)/(USEC_TO_SEC * USEC_TO_SEC)))
 
     # #################### OUTGOING PACKETS STATS ########################################
     print("\n\n////////////////////// OUTGOING PACKET STATISTICS ////////////////////////////")
     print("N: " + str(o_n))
+    print("Connection Time: " + str((o_elapsed_t[-1] - o_elapsed_t[0])/USEC_TO_SEC))
     print("Total Bytes: " + str(o_p_size))
-    print("Inter-Arrival Mean: " + '{0:.3f}'.format(stats.mean(o_inter_arr_t)))
-    print("Inter-Arrival Variance: " + '{0:.3f}'.format(stats.variance(o_inter_arr_t)))
+    print("Mean Bytes: " + str(stats.mean(o_bytes)))
+    print("Byte Variance: " + str(stats.variance(o_bytes)))
+    print("Inter-Arrival Mean: " + '{0:.5f}'.format(stats.mean(o_inter_arr_t)/USEC_TO_SEC))
+    print("Inter-Arrival Variance: " + '{0:.5f}'.format(stats.variance(o_inter_arr_t)/(USEC_TO_SEC * USEC_TO_SEC)))
 
     plt.show()

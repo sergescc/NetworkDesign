@@ -1,0 +1,20 @@
+
+
+////////////////////// INCOMING PACKET STATISTICS ////////////////////////////
+N: 54067
+Connection Time: 5705.206502
+Total Bytes: 108477948
+Mean Bytes: 2006.3244063
+Byte Variance: 1494840.31775
+Inter-Arrival Mean: 0.10552
+Inter-Arrival Variance: 0.29286
+
+
+////////////////////// OUTGOING PACKET STATISTICS ////////////////////////////
+N: 45931
+Connection Time: 5705.227187
+Total Bytes: 30584
+Mean Bytes: 0.66585387094
+Byte Variance: 414.546809893
+Inter-Arrival Mean: 0.12421
+Inter-Arrival Variance: 0.34222

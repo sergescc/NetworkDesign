@@ -1,21 +1,18 @@
 import CursorCntl
 import IPTrafficData
 import sys
-import numpy as np
-import statistics as stats
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gs
-import math
-from scipy.stats import poisson
+
 
 DOMAIN_ADDR = [129, 63]
 PORTS = 65536
 SYSTEM_PORTS = 1023
 RESERVED_PORTS = 49151
 USER_PORTS = 65536
-SYSTEM_PORT_STEPS = 10
-RESERVED_PORT_STEPS = 100
-USER_PORT_STEPS = 500
+SYSTEM_PORT_STEPS = 1
+RESERVED_PORT_STEPS = 10
+USER_PORT_STEPS = 50
 
 if __name__ == "__main__":
 
@@ -59,18 +56,42 @@ if __name__ == "__main__":
 
     i_byte_bin_c = 0
     o_byte_bin_c = 0
+    imax_pkt_count = 0
+    imax_byte_count =0
+    imax_byte_port = 0
+    imax_pkt_c_port= 0
+
+    omax_pkt_count = 0
+    omax_byte_count = 0
+    omax_byte_port = 0
+    omax_pkt_c_port = 0
+
 
     for d in data:
+
         if d.dst_ip[:2] == DOMAIN_ADDR[:2]:
             i_pkt_c[d.iport] += 1
             i_byte_c[d.iport] += d.p_size
             i_pkt_total += 1
             i_byte_total += d.p_size
+            if i_pkt_c[d.iport] > imax_pkt_count:
+                imax_pkt_c_port = d.iport
+                imax_pkt_count = i_pkt_c[d.iport]
+            if i_byte_c[d.iport] > imax_byte_count:
+                imax_byte_count = i_byte_c[d.iport]
+                imax_byte_port = d.iport
+
         if d.src_ip[:2] == DOMAIN_ADDR[:2]:
             o_pkt_c[d.oport] += 1
             o_byte_c[d.oport] += d.p_size
             o_pkt_total += 1
             o_byte_total += d.p_size
+            if o_pkt_c[d.oport] > omax_pkt_count:
+                omax_pkt_c_port = d.oport
+                omax_pkt_count = o_pkt_c[d.oport]
+            if o_byte_c[d.oport] > omax_byte_count:
+                omax_byte_count = o_byte_c[d.oport]
+                omax_byte_port = d.oport
 
     for i in range(0, PORTS, 1):
         if i <= SYSTEM_PORTS:
@@ -183,62 +204,74 @@ if __name__ == "__main__":
 
     grid = gs.GridSpec(2, 2)
     ip = plt.subplot(grid[0, 0])
-    ic = plt.subplot(grid[0, 1])
+    ib = plt.subplot(grid[0, 1])
     op = plt.subplot(grid[1, 0])
-    oc = plt.subplot(grid[1, 1])
+    ob = plt.subplot(grid[1, 1])
 
     ip.bar(pkt_port_bins,
-           i_pkt_c_pack,
-           color='purple',
-           alpha=.5,
-           label='Incoming Packets Counts',
-           width=pkt_port_width)
-
-    ip.set_xlim(-1000, USER_PORTS + 1000)
-    ip.set_title("Incoming Packet Counts per Port")
-    ip.set_xlabel("Ports")
-    ip.set_ylabel("Counts")
-
-    ic.bar(pkt_port_bins,
            i_pkt_c_pack_norm,
            color='purple',
            alpha=.5,
-           label='Incoming Packets Counts',
+           label='PMF Incoming Packets Counts',
            width=pkt_port_width)
 
-    ic.set_xlim(-1000, USER_PORTS + 1000)
-    ic.set_title("Probabilities of incoming Packet Counts per Port")
-    ic.set_xlabel("Ports")
-    ic.set_ylabel("Counts")
+    ip.set_xlim(-1000, USER_PORTS + 1000)
+    ip.set_title("PMF Incoming Packet Counts per Port")
+    ip.set_xlabel("Ports")
+    ip.set_ylabel("Probabilities")
+
+    ib.bar(pkt_port_bins,
+           i_byte_pack_norm,
+           color='purple',
+           alpha=.5,
+           label='PMF Incoming Byte Counts per Port',
+           width=pkt_port_width)
+    ib.set_xlim(-1000, USER_PORTS + 1000)
+    ib.set_title("PMF Incoming Byte Counts per Port")
+    ib.set_xlabel("Ports")
+    ib.set_ylabel("Probabilities")
 
     op.bar(pkt_port_bins,
-           o_pkt_c_pack,
-           color='green',
-           alpha=.5,
-           label='Incoming Packets Counts',
-           width=pkt_port_width)
-
-    op.set_xlim(-1000, USER_PORTS + 1000)
-    op.set_title("Outgoing Packet Counts per Port")
-    op.set_xlabel("Ports")
-    op.set_ylabel("Counts")
-
-    oc.bar(pkt_port_bins,
            o_pkt_c_pack_norm,
            color='green',
            alpha=.5,
            label='Incoming Packets Counts',
            width=pkt_port_width)
 
-    oc.set_xlim(-1000, USER_PORTS + 1000)
-    oc.set_title("Probabilities of Outgoing Packet Counts per Port")
-    oc.set_xlabel("Ports")
-    oc.set_ylabel("Counts")
+    op.set_xlim(-1000, USER_PORTS + 1000)
+    op.set_title("PMF Outgoing Packet Counts per Port")
+    op.set_xlabel("Ports")
+    op.set_ylabel("Probabilities")
+
+    ob.bar(pkt_port_bins,
+           o_byte_pack_norm,
+           color='green',
+           alpha=.5,
+           label='Incoming Packets Counts',
+           width=pkt_port_width)
+
+    ob.set_xlim(-1000, USER_PORTS + 1000)
+    ob.set_title("PMF Outgoing Byte Counts per Port")
+    ob.set_xlabel("Ports")
+    ob.set_ylabel("Probabilities")
+
+    print( "\n\n " + "/" * 15 + " Incoming Stats " + "/" * 15)
+    print("Total Bytes: " + str(i_byte_total))
+    print("Max Bytes per Port:" + str(imax_byte_count))
+    print("Port with most byte traffic: " + str(imax_byte_port))
+    print("Total Packets: " + str(i_pkt_total))
+    print("Max Packets per Port: " +str(imax_pkt_count))
+    print("Port with most packet traffic: " + str(imax_pkt_c_port))
+
+    print( "\n\n " +"/" * 15 + " Outgoing Stats " + "/" * 15)
+    print("Total Bytes: " + str(o_byte_total))
+    print("Max Bytes per Port:" + str(omax_byte_count))
+    print("Port with most byte traffic: " + str(omax_byte_port))
+    print("Total Packets: " + str(o_pkt_total))
+    print("Max Packets per Port: " +str(omax_pkt_count))
+    print("Port with most packet traffic: " + str(omax_pkt_c_port))
 
     plt.show()
-
-
-
 
     if len(sys.argv) > 2:
         plt.savefig(sys.argv[2])
